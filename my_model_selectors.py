@@ -37,7 +37,7 @@ class ModelSelector(object):
         # warnings.filterwarnings("ignore", category=RuntimeWarning)
         try:
             hmm_model = GaussianHMM(n_components=num_states, covariance_type="diag", n_iter=1000,
-                                    random_state=self.random_state, verbose=False).fit(self.X, self.lengths)
+                                    random_state=self.random_state, verbose=self.verbose).fit(self.X, self.lengths)
             if self.verbose:
                 print("model created for {} with {} states".format(self.this_word, num_states))
             return hmm_model
@@ -76,8 +76,32 @@ class SelectorBIC(ModelSelector):
         """
         warnings.filterwarnings("ignore", category=DeprecationWarning)
 
-        # TODO implement model selection based on BIC scores
-        raise NotImplementedError
+        # to calculate: BIC = -2 * logL + p * logN
+        # where L is the likelihood of the fitted model, p is the number of parameters,
+        # and N is the number of data points. The term −2 log L decreases with
+        # increasing model complexity (more parameters), whereas the penalties
+        # p log N increase with increasing complexity. The BIC applies a larger penalty
+        # when N > e^2 = 7.4.
+        min_bic = float("+inf")
+        best_model = None
+        
+        for num_components in range(self.min_n_components, self.max_n_components + 1):
+            try:
+                model = self.base_model(num_components)
+
+                # score computes the log probability under the model (http://hmmlearn.readthedocs.io/en/latest/api.html#hmmlearn.base._BaseHMM.score).
+                logL = model.score(self.X, self.lengths)
+
+                # number of free states (https://discussions.udacity.com/t/verifing-bic-calculation/246165/2)
+                p = num_components * num_components + 2 * num_components * len(self.X[0]) - 1
+
+                bic = -2 * logL +  p * math.log(len(self.X))
+                if  bic < min_bic:
+                    min_bic = bic
+                    best_model = model
+            except:
+                continue
+        return best_model
 
 
 class SelectorDIC(ModelSelector):
