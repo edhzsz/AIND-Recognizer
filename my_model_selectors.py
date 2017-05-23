@@ -84,7 +84,10 @@ class SelectorBIC(ModelSelector):
         # when N > e^2 = 7.4.
         min_bic = float("+inf")
         best_model = None
-        
+
+        N = len(self.X)
+        num_features = len(self.X[0])
+
         for num_components in range(self.min_n_components, self.max_n_components + 1):
             try:
                 model = self.base_model(num_components)
@@ -93,9 +96,24 @@ class SelectorBIC(ModelSelector):
                 logL = model.score(self.X, self.lengths)
 
                 # number of free states (https://discussions.udacity.com/t/verifing-bic-calculation/246165/2)
-                p = num_components * num_components + 2 * num_components * len(self.X[0]) - 1
+                # According to the formula, p(number of free parameters) is sum of these 4 terms:
+                # - Transition probs are the transmat array: num_components * num_components
+                # Since we know they add to 1.0, the last row can be calculated from the others,
+                # so the finally for learned parameters it is `num_components * (num_components - 1)`
+                # - Starting probabilities are the startprob array and are learned and are size
+                # num_components, but since they add up to 1.0, so it will be `num_components - 1`
+                # - Number of means= `num_components * num_features`
+                # - Variances are the size of the covars array, Since we are using
+                # "diag" it will be `num_components * num_features`
+                transition_probs = num_components * (num_components - 1)
+                starting_probs = num_components - 1
+                n_means = num_components * num_features
+                n_variances = num_components * num_features
 
-                bic = -2 * logL +  p * math.log(len(self.X))
+                p = transition_probs + starting_probs + n_means + n_variances
+
+                bic = -2 * logL + p * math.log(N)
+
                 if  bic < min_bic:
                     min_bic = bic
                     best_model = model
