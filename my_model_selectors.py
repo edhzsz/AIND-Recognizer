@@ -130,13 +130,43 @@ class SelectorDIC(ModelSelector):
     http://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.58.6208&rep=rep1&type=pdf
     DIC = log(P(X(i)) - 1/(M-1)SUM(log(P(X(all but i))
     '''
+    def __init__(self, all_word_sequences: dict, all_word_Xlengths: dict, this_word: str,
+                 n_constant=3,
+                 min_n_components=2, max_n_components=10,
+                 random_state=14, verbose=False):
+        ModelSelector.__init__(self, all_word_sequences, all_word_Xlengths, this_word,
+                 n_constant, min_n_components, max_n_components,random_state, verbose)
+
+        self.other_words = [word for word in self.hwords if word != self.this_word]
 
     def select(self):
         warnings.filterwarnings("ignore", category=DeprecationWarning)
 
-        # TODO implement model selection based on DIC scores
-        raise NotImplementedError
+        max_dic = float("-inf")
+        best_model = None
+        M = len(self.hwords)
 
+        for num_components in range(self.min_n_components,self.max_n_components + 1):
+            try:
+                model = self.base_model(num_components)
+                logL = model.score(self.X, self.lengths)
+
+                logL_other_words = [
+                        model.score(X, lengths)
+                        for (X, lengths)
+                        in [self.hwords[word] for word in self.other_words]
+                    ]
+
+                dic = logL - np.average(logL_other_words)
+
+                if dic > max_dic:
+                    max_dic = dic
+                    best_model = model
+            except Exception as e:
+                if self.verbose:
+                    print("Error calculating for {} components: {}".format(num_components, str(e)))
+
+        return best_model
 
 class SelectorCV(ModelSelector):
     ''' select best model based on average log Likelihood of cross-validation folds
