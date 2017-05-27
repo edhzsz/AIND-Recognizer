@@ -172,9 +172,57 @@ class SelectorCV(ModelSelector):
     ''' select best model based on average log Likelihood of cross-validation folds
 
     '''
+    def __init__(self, all_word_sequences: dict, all_word_Xlengths: dict, this_word: str,
+                 n_constant=3,
+                 min_n_components=2, max_n_components=10,
+                 random_state=14, n_splits=3, verbose=False):
+        ModelSelector.__init__(self, all_word_sequences, all_word_Xlengths, this_word,
+                 n_constant, min_n_components, max_n_components,random_state, verbose)
+
+        self.n_splits = n_splits
+        self.other_words = [word for word in self.hwords if word != self.this_word]
 
     def select(self):
         warnings.filterwarnings("ignore", category=DeprecationWarning)
 
-        # TODO implement model selection using CV
-        raise NotImplementedError
+        n_splits = self.n_splits
+
+        if len(self.sequences) < 2:
+            return None
+        elif len(self.sequences) < n_splits:
+            n_splits = len(self.sequences)
+
+        best_score = float("-inf")
+        best_model = None
+        split_method = KFold(n_splits=n_splits, random_state=self.random_state)
+
+        for num_components in range(self.min_n_components,self.max_n_components + 1):
+            model = None
+            split_scores = []
+
+            for cv_train_idx, cv_test_idx in split_method.split(self.sequences):
+                try:
+                    # Build the train and test sets by combinaning the sequences
+                    train_X, train_lengths = combine_sequences(cv_train_idx, self.sequences)
+                    test_X, test_lengths = combine_sequences(cv_test_idx, self.sequences)
+
+                    # Create the HMM model using the training set
+                    model = GaussianHMM(n_components=num_components, covariance_type="diag", n_iter=1000,
+                                        random_state=self.random_state, verbose=False).fit(train_X, train_lengths)
+
+                    # Store the score of the model on the test set
+                    split_scores.append( model.score(test_X, test_lengths) )
+
+                except Exception as e:
+                    if self.verbose:
+                        print("Error calculating for {} components: {}".format(num_components, str(e)))
+
+            # Get the average score
+            score = np.average(split_scores) if len(split_scores) > 0 else 0
+
+            if score > best_score:
+                best_score = score
+                # Generate the model using the whole training set
+                best_model = self.base_model(num_components)
+
+        return best_model
