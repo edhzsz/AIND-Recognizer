@@ -29,7 +29,7 @@ def recognize(models: dict, test_set: SinglesData):
         # Iterate over all models
         for word, model in models.items():
             try:
-                score = hmm_model.score(test_X, test_Xlength)
+                score = model.score(test_X, test_Xlength)
             except:
                 score = float("-inf")
 
